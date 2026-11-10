@@ -63,5 +63,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Extract ZIP project"
+          git commit -m "Extract ZIP Project
           git push
