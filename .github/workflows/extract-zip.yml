@@ -1,3 +1,53 @@
+
+name: Extract ZIP Project
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+      - "**/*.zip"
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Extract ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ZIP_FILE=$(find . -type f -iname "*.zip" \
+            -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ZIP file not found"
+            exit 1
+          fi
+
+          mkdir -p /tmp/extracted
+          unzip -oq "$ZIP_FILE" -d /tmp/extracted
+
+          mapfile -t ITEMS < <(
+            find /tmp/extracted -mindepth 1 -maxdepth 1
+          )
+
+          if [ "${#ITEMS[@]}" -eq 1 ] &&
+             [ -d "${ITEMS[0]}" ]; then
+            cp -a "${ITEMS[0]}"/. .
+          else
+            cp -a /tmp/extracted/. .
+          fi
+
       - name: Commit extracted files
         run: |
           set -e
