@@ -1,1 +1,81 @@
+name: Extract ZIP Project
 
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**/*.zip'
+      - '*.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Find and extract ZIP
+        shell: bash
+        run: |
+          set -e
+
+          mapfile -t files < <(
+            find . -type f -iname "*.zip" \
+              -not -path "./.git/*"
+          )
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "ERROR: No ZIP file found."
+            exit 1
+          fi
+
+          if [ "${#files[@]}" -gt 1 ]; then
+            echo "ERROR: Multiple ZIP files found:"
+            printf '%s\n' "${files[@]}"
+            exit 1
+          fi
+
+          ZIP_FILE="${files[0]}"
+          echo "Extracting: $ZIP_FILE"
+
+          mkdir -p /tmp/project-extract
+          unzip -q "$ZIP_FILE" -d /tmp/project-extract
+
+          # Remove one outer folder if the ZIP contains only one
+          # top-level directory.
+          mapfile -t entries < <(
+            find /tmp/project-extract -mindepth 1 -maxdepth 1
+          )
+
+          if [ "${#entries[@]}" -eq 1 ] &&
+             [ -d "${entries[0]}" ]; then
+            SOURCE_DIR="${entries[0]}"
+          else
+            SOURCE_DIR="/tmp/project-extract"
+          fi
+
+          cp -a "$SOURCE_DIR"/. .
+
+          echo "ZIP extraction completed."
+
+      - name: Commit extracted project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Extract project ZIP into repository" || {
+            echo "No changes to commit."
+          }
+
+          git push
