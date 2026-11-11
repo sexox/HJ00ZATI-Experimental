@@ -18,10 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
-      - name: Extract ZIP
+      - name: Extract ZIP safely
         shell: bash
         run: |
           set -euo pipefail
@@ -37,20 +35,22 @@ jobs:
           mkdir -p /tmp/extracted
           unzip -oq "$ZIP_FILE" -d /tmp/extracted
 
-          mapfile -t ITEMS < <(
-            find /tmp/extracted -mindepth 1 -maxdepth 1
-          )
-
-          if [ "${#ITEMS[@]}" -eq 1 ] &&
-             [ -d "${ITEMS[0]}" ]; then
-            cp -a "${ITEMS[0]}"/. .
+          if [ "$(find /tmp/extracted -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ] && \
+             [ -d "$(find /tmp/extracted -mindepth 1 -maxdepth 1 -type d | head -n 1)" ]; then
+            SOURCE_DIR=$(find /tmp/extracted -mindepth 1 -maxdepth 1 -type d | head -n 1)
           else
-            cp -a /tmp/extracted/. .
+            SOURCE_DIR=/tmp/extracted
           fi
+
+          rsync -a \
+            --exclude='/.github/' \
+            --exclude='/.git/' \
+            "$SOURCE_DIR"/ ./
 
       - name: Commit extracted files
         run: |
-          set -e
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -61,5 +61,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Extract ZIP project into repository"
+          git commit -m "Extract Android project from ZIP"
           git push
